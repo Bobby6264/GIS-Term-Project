@@ -1,4 +1,5 @@
 # Spatio-Temporal Hotspot Analysis of Campus Events
+
 ## Using DBSCAN, ST-DBSCAN and KDE
 
 **Course:** Geographical Information Systems
@@ -49,10 +50,10 @@ WiFi traces from the CRAWDAD archive).
 
 Two datasets, each with a distinct role:
 
-| Dataset | Role | Size |
-|---------|------|------|
-| **Synthetic campus events** | Validation (has ground truth) | 5,000 events |
-| **KTH/Campus WiFi** (CRAWDAD) | Primary real-world dataset | 5,589,617 events |
+| Dataset                             | Role                          | Size             |
+| ----------------------------------- | ----------------------------- | ---------------- |
+| **Synthetic campus events**   | Validation (has ground truth) | 5,000 events     |
+| **KTH/Campus WiFi** (CRAWDAD) | Primary real-world dataset    | 5,589,617 events |
 
 The synthetic data proves the method **works** (we can verify it
 recovers known hotspots). The KTH data proves the method
@@ -63,6 +64,7 @@ recovers known hotspots). The KTH data proves the method
 ## 3. SYNTHETIC CAMPUS DATASET
 
 ### 3.1 What it is
+
 A synthetic generator creates **5,000 events** across **3 known
 hotspot locations** over **30 simulated days**:
 
@@ -72,6 +74,7 @@ hotspot locations** over **30 simulated days**:
 - **500 noise events** — uniformly scattered, no pattern
 
 ### 3.2 Why synthetic
+
 Real data has no ground truth — we cannot quantitatively verify
 whether an algorithm found "the right" hotspots. Synthetic data has
 known hotspots, so we can measure correctness. This is standard
@@ -79,26 +82,28 @@ practice for validating clustering algorithms.
 
 ### 3.3 Columns in `data/campus_events.csv`
 
-| Column | Meaning |
-|--------|---------|
-| `event_id` | Unique event ID |
-| `lon`, `lat` | Longitude, latitude |
-| `day` | Simulated day (0–29) |
-| `hour` | Hour of day (0–23) |
-| `type` | Hotspot name (Library/Cafeteria/Sports/other) |
+| Column           | Meaning                                       |
+| ---------------- | --------------------------------------------- |
+| `event_id`     | Unique event ID                               |
+| `lon`, `lat` | Longitude, latitude                           |
+| `day`          | Simulated day (0–29)                         |
+| `hour`         | Hour of day (0–23)                           |
+| `type`         | Hotspot name (Library/Cafeteria/Sports/other) |
 
 ### 3.4 Code that generates it
+
 - **Script:** `scripts/generate_data.py`
 - **Output:** `data/campus_events.csv`
 
 ### 3.5 Results on synthetic data
 
-| Method | Clusters | Noise % | Silhouette |
-|--------|----------|---------|------------|
-| DBSCAN (spatial) | **3** | 8.8% | **0.901** |
-| ST-DBSCAN | **6** | 9.4% | **0.548** |
+| Method           | Clusters    | Noise % | Silhouette      |
+| ---------------- | ----------- | ------- | --------------- |
+| DBSCAN (spatial) | **3** | 8.8%    | **0.901** |
+| ST-DBSCAN        | **6** | 9.4%    | **0.548** |
 
 **Interpretation:**
+
 - Spatial DBSCAN recovered the 3 planted hotspots exactly
 - ST-DBSCAN found 6 clusters — each hotspot split into 2 temporal
   regimes (Cafeteria lunch vs dinner; Sports morning vs evening)
@@ -111,6 +116,7 @@ practice for validating clustering algorithms.
 ## 4. KTH/CAMPUS WiFi DATASET (PRIMARY REAL DATA)
 
 ### 4.1 What the dataset is
+
 **CRAWDAD KTH/Campus** — real wireless network measurements from
 **KTH Royal Institute of Technology**, Stockholm, Sweden.
 
@@ -124,36 +130,38 @@ practice for validating clustering algorithms.
 
 ### 4.2 Raw data files
 
-| File | Contents |
-|------|----------|
-| `data/kth/2014_01.csv.gz` | January 2014 WiFi association log (113 MB compressed, ~5.6M rows) |
-| `data/kth/APlocations.txt` | AP name → x, y, floor coordinate mapping |
+| File                         | Contents                                                          |
+| ---------------------------- | ----------------------------------------------------------------- |
+| `data/kth/2014_01.csv.gz`  | January 2014 WiFi association log (113 MB compressed, ~5.6M rows) |
+| `data/kth/APlocations.txt` | AP name → x, y, floor coordinate mapping                         |
 
 ### 4.3 Raw columns
 
 **`2014_01.csv.gz`:**
 
-| Column | Meaning |
-|--------|---------|
-| `timestamp` | When the device connected |
-| `client` | Anonymized MAC address (device ID) |
-| `AP` | Access point name (e.g., `Bldg11AP21`) |
+| Column        | Meaning                                 |
+| ------------- | --------------------------------------- |
+| `timestamp` | When the device connected               |
+| `client`    | Anonymized MAC address (device ID)      |
+| `AP`        | Access point name (e.g.,`Bldg11AP21`) |
 
 **`APlocations.txt`:**
 
-| Column | Meaning |
-|--------|---------|
-| `AP` | Access point name |
+| Column              | Meaning                                   |
+| ------------------- | ----------------------------------------- |
+| `AP`              | Access point name                         |
 | `x_coordinate(m)` | X coordinate in meters (local KTH system) |
-| `y_coordinate(m)` | Y coordinate in meters |
-| `floor` | Building floor |
+| `y_coordinate(m)` | Y coordinate in meters                    |
+| `floor`           | Building floor                            |
 
 ### 4.4 Which portion we used
+
 **January 2014 only** — one month, 5.6M events. Enough to
 characterize a month of activity. Larger samples don't change the
 methodological story.
 
 ### 4.5 Data cleaning and feature extraction
+
 - Dropped events whose `AP` has no entry in `APlocations.txt`
   (2,482 of 5.6M — negligible)
 - Merged events with AP coordinates (inner join)
@@ -162,6 +170,7 @@ methodological story.
 - **Result:** `data/kth_events.csv` — 5,589,617 events
 
 ### 4.6 Aggregation into spatio-temporal buckets
+
 5.6M raw events is too large for interactive clustering and contains
 many events at **identical (x, y)** coordinates (multiple APs in a
 building share coordinates). We aggregated events into
@@ -177,15 +186,16 @@ into a density surface before clustering.
 
 ### 4.7 Columns in `data/kth_aggregated.csv`
 
-| Column | Meaning |
-|--------|---------|
-| `AP` | Access point name |
-| `x`, `y` | Coordinates in meters |
-| `hour` | Hour of day (0–23) |
-| `day` | Day of month (1–31) |
-| `count` | Number of WiFi associations at this (AP, hour, day) |
+| Column       | Meaning                                             |
+| ------------ | --------------------------------------------------- |
+| `AP`       | Access point name                                   |
+| `x`, `y` | Coordinates in meters                               |
+| `hour`     | Hour of day (0–23)                                 |
+| `day`      | Day of month (1–31)                                |
+| `count`    | Number of WiFi associations at this (AP, hour, day) |
 
 ### 4.8 Collapse across days (for ST-DBSCAN)
+
 Because we want **daily patterns** (not day-to-day variation), we
 collapse `day` by summing counts, giving one row per **(AP, hour)**:
 
@@ -197,24 +207,29 @@ collapse `day` by summing counts, giving one row per **(AP, hour)**:
 ## 5. ALGORITHMS USED
 
 ### 5.1 DBSCAN
+
 Density-based clustering. Groups points that are densely packed
 (within radius `eps`, with at least `minPts` neighbors). Points in
 low-density regions are labelled **noise** (−1).
 
 **Chosen over K-means because:**
+
 - No need to specify `k`
 - Finds arbitrary cluster shapes
 - Explicitly handles noise
 
 ### 5.2 ST-DBSCAN
+
 Same as DBSCAN but requires closeness in **both space AND time**.
 Implementation: combine (x, y, hour × scale) into one feature space
 and run DBSCAN. The scale factor maps `eps_time` hours to
 `eps_spatial` meters so one `eps` works across all axes.
 
 ### 5.3 KDE
+
 Smooths points into a continuous density surface (heatmap) using
 Gaussian kernels. Complementary to DBSCAN:
+
 - DBSCAN → discrete clusters with hard boundaries
 - KDE → continuous intensity surface
 
@@ -232,6 +247,7 @@ measures how well each point fits its own cluster compared to the
 nearest other cluster.
 
 **How it's computed:** For each point i:
+
 - **a(i)** = mean distance to all other points in its own cluster
 - **b(i)** = mean distance to all points in the nearest other cluster
 - **silhouette(i) = (b(i) − a(i)) / max(a(i), b(i))**
@@ -240,32 +256,34 @@ The overall score is the mean over all points.
 
 **Interpretation:**
 
-| Silhouette | Meaning |
-|------------|---------|
+| Silhouette  | Meaning                                               |
+| ----------- | ----------------------------------------------------- |
 | Close to +1 | Point is well inside its own cluster, far from others |
-| Around 0 | Point lies on the boundary between two clusters |
-| Negative | Point might belong to a different cluster |
+| Around 0    | Point lies on the boundary between two clusters       |
+| Negative    | Point might belong to a different cluster             |
 
 **Why we use it:**
+
 - Objective measure of cluster quality
 - Lets us compare algorithms on the same data
 - Lets us compare datasets
 - Gives the panel a number to react to
 
 **Caveats:**
+
 - Silhouette ignores noise labels (−1)
 - On very dense datasets, silhouette can be misleadingly high
 - Real data usually gives lower silhouette than synthetic
 
 **Our silhouette results explained:**
 
-| Dataset | Method | Silhouette | Why |
-|---------|--------|------------|-----|
-| Synthetic | DBSCAN | **0.901** | Gaussian blobs are well-separated by construction |
-| Synthetic | ST-DBSCAN | **0.548** | Time dimension makes clusters more crowded |
-| KTH | DBSCAN | **0.997** | APs in same building share coordinates — clusters are physically perfect |
-| KTH | ST-DBSCAN | **0.246** | Time dimension added — clusters overlap in time |
-| KTH | Time-sliced | **0.997** | Same as spatial because slices share coordinates |
+| Dataset   | Method      | Silhouette      | Why                                                                       |
+| --------- | ----------- | --------------- | ------------------------------------------------------------------------- |
+| Synthetic | DBSCAN      | **0.901** | Gaussian blobs are well-separated by construction                         |
+| Synthetic | ST-DBSCAN   | **0.548** | Time dimension makes clusters more crowded                                |
+| KTH       | DBSCAN      | **0.997** | APs in same building share coordinates — clusters are physically perfect |
+| KTH       | ST-DBSCAN   | **0.246** | Time dimension added — clusters overlap in time                          |
+| KTH       | Time-sliced | **0.997** | Same as spatial because slices share coordinates                          |
 
 **Takeaway:** Silhouette measures *geometric compactness*, not
 *meaningfulness*. KTH's 0.997 doesn't mean KTH clusters are more
@@ -279,6 +297,7 @@ The overall score is the mean over all points.
 a building that client devices connect to.
 
 **In our KTH dataset:**
+
 - KTH has **1,123 access points** across its campuses
 - Each AP has a name like `Bldg11AP21` (building 11, AP 21)
 - Each AP has coordinates `(x, y, floor)` in `APlocations.txt`
@@ -316,6 +335,7 @@ timestamp                client      AP
 ```
 
 Issues:
+
 1. Too many rows — slow to cluster (DBSCAN took 125 s)
 2. Redundant — 923 events at the same (AP, hour, day) all say the
    same thing: "this place was busy at this time"
@@ -330,12 +350,12 @@ Result: **5,589,617 rows → 346,770 rows** (16× reduction).
 
 **Why this is the right thing to do:**
 
-| Reason | Explanation |
-|--------|-------------|
-| Semantic | We care about "how busy was this AP at this hour" — count captures it |
-| Computational | 346k rows cluster ~3× faster than 5.6M |
-| Robust | Duplicate points no longer dominate k-distance |
-| Standard GIS practice | Aggregating point events to density grids is textbook |
+| Reason                | Explanation                                                            |
+| --------------------- | ---------------------------------------------------------------------- |
+| Semantic              | We care about "how busy was this AP at this hour" — count captures it |
+| Computational         | 346k rows cluster ~3× faster than 5.6M                                |
+| Robust                | Duplicate points no longer dominate k-distance                         |
+| Standard GIS practice | Aggregating point events to density grids is textbook                  |
 
 **The code:**
 
@@ -350,18 +370,17 @@ agg = (
 - `groupby([...])` — group rows by these 5 columns
 - `.size()` — count rows in each group
 - `.reset_index(name="count")` — convert back to DataFrame with a `count` column
-
 - **Script:** `scripts/aggregate_kth.py`
 - **Output:** `data/kth_aggregated.csv`
 
 **Aggregation stages in our project:**
 
-| Stage | Rows | What it represents |
-|-------|------|--------------------|
-| Raw KTH log | 5,589,617 | One row per WiFi association |
-| Merged with AP locations | 5,589,617 | Added x, y, floor |
-| Aggregated (AP, hour, day) | 346,770 | One row per (AP, hour, day) with count |
-| Aggregated (AP, hour) for ST-DBSCAN | 20,129 | Collapsed across days |
+| Stage                               | Rows      | What it represents                     |
+| ----------------------------------- | --------- | -------------------------------------- |
+| Raw KTH log                         | 5,589,617 | One row per WiFi association           |
+| Merged with AP locations            | 5,589,617 | Added x, y, floor                      |
+| Aggregated (AP, hour, day)          | 346,770   | One row per (AP, hour, day) with count |
+| Aggregated (AP, hour) for ST-DBSCAN | 20,129    | Collapsed across days                  |
 
 ---
 
@@ -370,13 +389,13 @@ agg = (
 **Features used:**
 
 - **Spatial DBSCAN — 2 features:**
+
   - `x` — meters east of the campus origin
   - `y` — meters north of the campus origin
-
 - **ST-DBSCAN — 3 features:**
+
   - `x`, `y` — as above
   - `hour × scale` — hour of day, scaled so `eps_time` hours equals `eps_spatial` meters
-
 - **KDE** — no clustering, but weighted by `count` per (AP, hour).
 
 **Why these features:**
@@ -435,14 +454,14 @@ So:
 
 **Our KTH eps sweep (raw evidence):**
 
-| eps (m) | clusters | noise % | silhouette | Interpretation |
-|---------|----------|---------|------------|----------------|
-| 20 | 53 | 0.0% | 0.999 | Building-level (each AP group isolated) |
-| 30 | 52 | 0.0% | 0.997 | Building-level — **CHOSEN** |
-| 50 | 34 | 0.0% | 0.775 | Multiple buildings merged |
-| 75 | 19 | 0.0% | 0.441 | District-level merging |
-| 100 | 13 | 0.0% | 0.491 | Neighborhood-level |
-| 150 | 10 | 0.0% | 0.579 | Too coarse |
+| eps (m) | clusters | noise % | silhouette | Interpretation                          |
+| ------- | -------- | ------- | ---------- | --------------------------------------- |
+| 20      | 53       | 0.0%    | 0.999      | Building-level (each AP group isolated) |
+| 30      | 52       | 0.0%    | 0.997      | Building-level —**CHOSEN**       |
+| 50      | 34       | 0.0%    | 0.775      | Multiple buildings merged               |
+| 75      | 19       | 0.0%    | 0.441      | District-level merging                  |
+| 100     | 13       | 0.0%    | 0.491      | Neighborhood-level                      |
+| 150     | 10       | 0.0%    | 0.579      | Too coarse                              |
 
 **Reading the table:**
 
@@ -501,13 +520,13 @@ for label, h0, h1 in SLICES:
 
 ### 6.6 Why Not Use Other Clustering Algorithms?
 
-| Algorithm | Why not for our data |
-|-----------|---------------------|
-| K-means | Requires specifying k upfront; assumes spherical clusters; no noise handling |
-| Hierarchical | O(n²) memory — infeasible on 346k points |
-| Mean-shift | Needs bandwidth parameter; doesn't handle noise as cleanly |
-| Gaussian Mixture Models | Assumes Gaussian distributions per cluster; KTH APs are not Gaussian |
-| HDBSCAN | Overkill for a course project |
+| Algorithm               | Why not for our data                                                         |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| K-means                 | Requires specifying k upfront; assumes spherical clusters; no noise handling |
+| Hierarchical            | O(n²) memory — infeasible on 346k points                                   |
+| Mean-shift              | Needs bandwidth parameter; doesn't handle noise as cleanly                   |
+| Gaussian Mixture Models | Assumes Gaussian distributions per cluster; KTH APs are not Gaussian         |
+| HDBSCAN                 | Overkill for a course project                                                |
 
 DBSCAN is chosen because: no k needed, handles arbitrary
 shapes, explicit noise labeling, two intuitive parameters with
@@ -558,11 +577,11 @@ kernel). Sum all bumps. The result is a smooth surface where peaks
 
 **Why use KDE alongside DBSCAN:**
 
-| DBSCAN | KDE |
-|--------|-----|
-| Discrete clusters with hard boundaries | Continuous density surface |
-| Tells you where clusters are | Tells you how intense each region is |
-| Labels every point | Smooths across boundaries |
+| DBSCAN                                 | KDE                                  |
+| -------------------------------------- | ------------------------------------ |
+| Discrete clusters with hard boundaries | Continuous density surface           |
+| Tells you where clusters are           | Tells you how intense each region is |
+| Labels every point                     | Smooths across boundaries            |
 
 They answer different questions and are complementary.
 
@@ -621,15 +640,15 @@ structure dominates.
 DBSCAN, ST-DBSCAN and KDE are **not trained** — they are
 unsupervised, non-parametric algorithms.
 
-| Aspect | Supervised ML | Our methods |
-|--------|---------------|-------------|
-| Learns parameters? | Yes | No |
-| Has weights? | Yes | No |
-| Loss function? | Yes | No |
-| Train/test split? | Yes | No |
-| Overfitting risk? | Yes | No |
-| Deterministic output? | No | Yes (given hyperparams) |
-| Terminology | "Train", "fit", "predict" | "Run", "apply", "cluster" |
+| Aspect                | Supervised ML             | Our methods               |
+| --------------------- | ------------------------- | ------------------------- |
+| Learns parameters?    | Yes                       | No                        |
+| Has weights?          | Yes                       | No                        |
+| Loss function?        | Yes                       | No                        |
+| Train/test split?     | Yes                       | No                        |
+| Overfitting risk?     | Yes                       | No                        |
+| Deterministic output? | No                        | Yes (given hyperparams)   |
+| Terminology           | "Train", "fit", "predict" | "Run", "apply", "cluster" |
 
 The only choices we make are hyperparameters: `eps`, `minPts`,
 `eps_time`. We select them via a parameter sweep and by looking at
@@ -637,32 +656,32 @@ the silhouette score.
 
 **Analogy:** DBSCAN is like a sieve with a fixed hole size — you
 pour data through it and clusters fall out. There is no learning.
----
+-----------------------------------------------------------------
 
 ## 7. SCRIPTS AND WHAT THEY GENERATE
 
 ### 7.1 Synthetic pipeline
 
-| Script | Generates |
-|--------|-----------|
-| `scripts/generate_data.py` | `data/campus_events.csv` — synthetic events |
-| `scripts/tune_eps.py` | `data/eps_sweep.csv` — eps sweep table |
+| Script                        | Generates                                                                                                                          |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/generate_data.py`  | `data/campus_events.csv` — synthetic events                                                                                     |
+| `scripts/tune_eps.py`       | `data/eps_sweep.csv` — eps sweep table                                                                                          |
 | `scripts/dbscan_spatial.py` | `figures/fig_kdistance.png`, `figures/fig_dbscan_clusters.png`, `data/campus_events_dbscan.csv`, `data/metrics_dbscan.csv` |
-| `scripts/stdbscan.py` | `figures/fig_stdbscan_clusters.png`, `data/campus_events_stdbscan.csv`, `data/metrics_stdbscan.csv` |
-| `scripts/kde_analysis.py` | `figures/fig_kde_allday.png`, `figures/fig_kde_time_slices.png`, `figures/fig_kde_vs_dbscan.png` |
-| `scripts/summarize.py` | `data/results_summary.csv` |
+| `scripts/stdbscan.py`       | `figures/fig_stdbscan_clusters.png`, `data/campus_events_stdbscan.csv`, `data/metrics_stdbscan.csv`                          |
+| `scripts/kde_analysis.py`   | `figures/fig_kde_allday.png`, `figures/fig_kde_time_slices.png`, `figures/fig_kde_vs_dbscan.png`                             |
+| `scripts/summarize.py`      | `data/results_summary.csv`                                                                                                       |
 
 ### 7.2 KTH pipeline
 
-| Script | Generates |
-|--------|-----------|
-| `scripts/inspect_kth.py` | Printed inspection of raw KTH data |
-| `scripts/kth_to_events.py` | `data/kth_events.csv` — merged events with coordinates |
-| `scripts/aggregate_kth.py` | `data/kth_aggregated.csv` — aggregated (AP, hour, day) counts |
-| `scripts/dbscan_kth_agg.py` | `figures/fig_kth_kdistance.png`, `figures/fig_kth_dbscan_clusters.png`, `data/kth_aggregated_dbscan.csv`, `data/metrics_kth_dbscan.csv` |
-| `scripts/stdbscan_kth.py` | `figures/fig_kth_stdbscan_clusters.png`, `data/kth_aggregated_stdbscan.csv`, `data/metrics_kth_stdbscan.csv` |
-| `scripts/time_sliced_dbscan.py` | `figures/fig_kth_time_sliced.png`, `data/metrics_kth_time_sliced.csv` |
-| `scripts/kde_kth.py` | `figures/fig_kth_kde_allday.png`, `figures/fig_kth_kde_time_slices.png` |
+| Script                            | Generates                                                                                                                                       |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/inspect_kth.py`        | Printed inspection of raw KTH data                                                                                                              |
+| `scripts/kth_to_events.py`      | `data/kth_events.csv` — merged events with coordinates                                                                                       |
+| `scripts/aggregate_kth.py`      | `data/kth_aggregated.csv` — aggregated (AP, hour, day) counts                                                                                |
+| `scripts/dbscan_kth_agg.py`     | `figures/fig_kth_kdistance.png`, `figures/fig_kth_dbscan_clusters.png`, `data/kth_aggregated_dbscan.csv`, `data/metrics_kth_dbscan.csv` |
+| `scripts/stdbscan_kth.py`       | `figures/fig_kth_stdbscan_clusters.png`, `data/kth_aggregated_stdbscan.csv`, `data/metrics_kth_stdbscan.csv`                              |
+| `scripts/time_sliced_dbscan.py` | `figures/fig_kth_time_sliced.png`, `data/metrics_kth_time_sliced.csv`                                                                       |
+| `scripts/kde_kth.py`            | `figures/fig_kth_kde_allday.png`, `figures/fig_kth_kde_time_slices.png`                                                                     |
 
 ---
 
@@ -735,18 +754,18 @@ proof of the temporal signal.
 
 ### 9.1 Synthetic campus data
 
-| Method | Clusters | Noise % | Silhouette |
-|--------|----------|---------|------------|
-| DBSCAN (spatial) | 3 | 8.8% | 0.901 |
-| ST-DBSCAN | 6 | 9.4% | 0.548 |
+| Method           | Clusters | Noise % | Silhouette |
+| ---------------- | -------- | ------- | ---------- |
+| DBSCAN (spatial) | 3        | 8.8%    | 0.901      |
+| ST-DBSCAN        | 6        | 9.4%    | 0.548      |
 
 ### 9.2 KTH campus WiFi data
 
-| Method | eps | Clusters | Noise % | Silhouette |
-|--------|-----|----------|---------|------------|
-| DBSCAN (spatial) | 30 m | 52 | 0.0% | 0.997 |
-| ST-DBSCAN | 30 m / 2 hr | 54 | 0.0% | 0.246 |
-| Time-sliced DBSCAN (avg) | 30 m | 52 | 0.0% | 0.997 |
+| Method                   | eps         | Clusters | Noise % | Silhouette |
+| ------------------------ | ----------- | -------- | ------- | ---------- |
+| DBSCAN (spatial)         | 30 m        | 52       | 0.0%    | 0.997      |
+| ST-DBSCAN                | 30 m / 2 hr | 54       | 0.0%    | 0.246      |
+| Time-sliced DBSCAN (avg) | 30 m        | 52       | 0.0%    | 0.997      |
 
 **Additional numeric finding:** Hourly WiFi event count peaks at
 23,495 (13:00) and drops to 3,582 (04:00) — a 6.5× swing

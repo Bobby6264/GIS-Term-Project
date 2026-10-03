@@ -21,7 +21,7 @@ os.makedirs(FIG_DIR, exist_ok=True)
 EARTH_RADIUS_METERS = 6371008.8
 
 # -------------------------------------------------------------
-# 1. Parsing
+# 1. Parsing (UPDATED to keep Building Name)
 # -------------------------------------------------------------
 def parse_data():
     rest_files = glob.glob(os.path.join(RAW_DATA_DIR, "*RestPoints*.tab"))
@@ -34,8 +34,9 @@ def parse_data():
         df_rest = pd.DataFrame({
             "epoch_sec": pd.to_datetime(df_rest["Loct_Start"], format="%d-%b-%Y %I:%M:%S %p", errors="coerce").astype("int64") // 10**9,
             "lat": pd.to_numeric(df_rest["Lat"], errors="coerce"),
-            "lon": pd.to_numeric(df_rest["Lon"], errors="coerce")
-        }).dropna()
+            "lon": pd.to_numeric(df_rest["Lon"], errors="coerce"),
+            "building": df_rest["Building_Name"].astype(str) if "Building_Name" in df_rest.columns else "Unknown"
+        }).dropna(subset=["epoch_sec", "lat", "lon"])
         df_rest = df_rest[(df_rest["lat"].between(51.070, 51.090)) & (df_rest["lon"].between(-114.150, -114.110))].copy()
 
     if not df_path.empty:
@@ -43,13 +44,13 @@ def parse_data():
             "epoch_sec": pd.to_datetime(df_path["Loct"], format="%d-%b-%Y %I:%M:%S %p", errors="coerce").astype("int64") // 10**9,
             "lat": pd.to_numeric(df_path["Lat"], errors="coerce"),
             "lon": pd.to_numeric(df_path["Lon"], errors="coerce")
-        }).dropna()
+        }).dropna(subset=["epoch_sec", "lat", "lon"])
         df_path = df_path[(df_path["lat"].between(51.070, 51.090)) & (df_path["lon"].between(-114.150, -114.110))].copy()
 
     return df_rest, df_path
 
 # -------------------------------------------------------------
-# 2. DBSCAN (Calculates & Plots)
+# 2. DBSCAN (UPDATED for Semantic Legends)
 # -------------------------------------------------------------
 def run_dbscan_and_plot(df, dataset_name, eps_m=12.0, min_pts=60):
     print(f"\n--- Running Spatial DBSCAN on {dataset_name} ---")
@@ -60,7 +61,7 @@ def run_dbscan_and_plot(df, dataset_name, eps_m=12.0, min_pts=60):
     n_clusters = len(set(df["cluster"])) - (1 if -1 in df["cluster"].values else 0)
     print(f"Discovered {n_clusters} clusters in {dataset_name}.")
 
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(12, 9))
     mask = df["cluster"] != -1
     
     # Plot Noise
@@ -72,16 +73,29 @@ def run_dbscan_and_plot(df, dataset_name, eps_m=12.0, min_pts=60):
     ax.set_xlabel("Longitude")
     ax.set_ylabel("Latitude")
 
-    # Dynamic Legend Below Graph
+    # Dynamic Semantic Legend Below Graph
     unique_clusters = sorted(df.loc[mask, "cluster"].unique())
     handles = [mpatches.Patch(color="lightgrey", label="Noise (-1)")]
+    
     for c in unique_clusters[:30]:  # Cap at 30 items for formatting
         color = scatter.cmap(scatter.norm(c))
-        handles.append(mpatches.Patch(color=color, label=f"Cluster {c}"))
+        
+        # Get the most common building name for this geometric cluster
+        if "building" in df.columns:
+            b_name = df.loc[df["cluster"] == c, "building"].mode()[0]
+            # Truncate long building names so the legend doesn't break
+            b_name = b_name[:20] + "..." if len(b_name) > 20 else b_name
+            label = f"C{c}: {b_name}"
+        else:
+            label = f"Cluster {c}"
+            
+        handles.append(mpatches.Patch(color=color, label=label))
+        
     if len(unique_clusters) > 30:
         handles.append(mpatches.Patch(color="white", label="... (more omitted)"))
 
-    ax.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, -0.1), ncol=5, fontsize=8, title="Color Mapping")
+    # Adjust bounding box to make room for the larger semantic legend
+    ax.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, -0.1), ncol=3, fontsize=8, title="Mapped Building Clusters")
     
     plt.tight_layout()
     out_path = os.path.join(FIG_DIR, f"1_dbscan_{dataset_name.lower().replace(' ', '_')}.png")
@@ -89,76 +103,71 @@ def run_dbscan_and_plot(df, dataset_name, eps_m=12.0, min_pts=60):
     plt.close(fig)
     print(f"[*] Saved {out_path}")
     return df
-
+    
 # -------------------------------------------------------------
-# 3. ST-DBSCAN (Calculates & Plots)
+# 2. DBSCAN (UPDATED for High-Contrast Randomized Colors)
 # -------------------------------------------------------------
-def run_st_dbscan_and_plot(df, dataset_name, eps_m=12.0, eps_sec=1800, min_pts=30):
-    print(f"\n--- Running ST-DBSCAN on {dataset_name} ---")
+def run_dbscan_and_plot(df, dataset_name, eps_m=12.0, min_pts=60):
+    print(f"\n--- Running Spatial DBSCAN on {dataset_name} ---")
     coords = np.radians(df[["lat", "lon"]].values)
-    times = df["epoch_sec"].values
-    n = len(df)
+    db = DBSCAN(eps=eps_m / EARTH_RADIUS_METERS, min_samples=min_pts, metric="haversine")
+    df["cluster"] = db.fit_predict(coords)
     
-    tree = BallTree(coords, metric="haversine")
-    spatial_neighbors = tree.query_radius(coords, r=eps_m / EARTH_RADIUS_METERS)
-    
-    labels = np.full(n, -1, dtype=int)
-    visited = np.zeros(n, dtype=bool)
-    cluster_id = 0
+    mask = df["cluster"] != -1
+    unique_clusters = sorted(df.loc[mask, "cluster"].unique())
+    n_clusters = len(unique_clusters)
+    print(f"Discovered {n_clusters} clusters in {dataset_name}.")
 
-    progress_interval = max(1, n // 10)
-    for i in range(n):
-        if i % progress_interval == 0 and i > 0:
-            print(f"    Progress: {int((i / n) * 100)}%...")
-            
-        if visited[i]: continue
-        visited[i] = True
-        
-        cand = spatial_neighbors[i]
-        st_neighbors = cand[np.abs(times[cand] - times[i]) <= eps_sec]
-        
-        if len(st_neighbors) >= min_pts:
-            cluster_id += 1
-            labels[i] = cluster_id
-            seed_set = list(st_neighbors[st_neighbors != i])
-            
-            while seed_set:
-                curr = seed_set.pop(0)
-                if not visited[curr]:
-                    visited[curr] = True
-                    c_cand = spatial_neighbors[curr]
-                    c_st = c_cand[np.abs(times[c_cand] - times[curr]) <= eps_sec]
-                    if len(c_st) >= min_pts:
-                        seed_set.extend([p for p in c_st if p not in seed_set and not visited[p]])
-                if labels[curr] == -1:
-                    labels[curr] = cluster_id
-                    
-    df["st_cluster"] = labels
-    n_st_clusters = cluster_id
-    print(f"Discovered {n_st_clusters} spatio-temporal clusters in {dataset_name}.")
+    fig, ax = plt.subplots(figsize=(12, 9))
+    
+    # 1. Generate a large, highly varied colormap
+    color_array = plt.cm.nipy_spectral(np.linspace(0.1, 0.9, max(n_clusters, 1)))
+    
+    # 2. Shuffle the colors so adjacent buildings get contrasting colors
+    np.random.seed(42)
+    np.random.shuffle(color_array)
+    
+    # 3. Map the shuffled colors to specific cluster IDs
+    color_dict = {c: color_array[i] for i, c in enumerate(unique_clusters)}
+    
+    # 4. Apply colors to the dataframe for plotting
+    df.loc[mask, "plot_color"] = df.loc[mask, "cluster"].map(color_dict)
 
-    fig, ax = plt.subplots(figsize=(10, 8))
-    mask_st = df["st_cluster"] != -1
+    # Plot Noise
+    ax.scatter(df.loc[~mask, "lon"], df.loc[~mask, "lat"], c="lightgrey", s=2, alpha=0.3, label="Noise")
     
-    ax.scatter(df.loc[~mask_st, "lon"], df.loc[~mask_st, "lat"], c="lightgrey", s=2, alpha=0.3)
-    scatter_st = ax.scatter(df.loc[mask_st, "lon"], df.loc[mask_st, "lat"], c=df.loc[mask_st, "st_cluster"], cmap="turbo", s=10)
+    # Plot Clusters
+    if not df[mask].empty:
+        # Convert pandas series of RGB arrays to a standard list for scatter
+        ax.scatter(df.loc[mask, "lon"], df.loc[mask, "lat"], c=list(df.loc[mask, "plot_color"]), s=10)
     
-    ax.set_title(f"ST-DBSCAN: {dataset_name} ({n_st_clusters} Events)")
+    ax.set_title(f"Spatial DBSCAN: {dataset_name} ({n_clusters} Clusters)")
     ax.set_xlabel("Longitude")
     ax.set_ylabel("Latitude")
 
-    unique_st = sorted(df.loc[mask_st, "st_cluster"].unique())
-    handles_st = [mpatches.Patch(color="lightgrey", label="Noise (-1)")]
-    for c in unique_st[:30]:
-        color = scatter_st.cmap(scatter_st.norm(c))
-        handles_st.append(mpatches.Patch(color=color, label=f"Time Event {c}"))
-    if len(unique_st) > 30:
-        handles_st.append(mpatches.Patch(color="white", label="... (more omitted)"))
+    # Dynamic Semantic Legend Below Graph
+    handles = [mpatches.Patch(color="lightgrey", label="Noise (-1)")]
+    
+    for c in unique_clusters[:30]:  # Cap at 30 items for formatting
+        c_color = color_dict[c]
+        
+        # Get the most common building name for this geometric cluster
+        if "building" in df.columns:
+            b_name = df.loc[df["cluster"] == c, "building"].mode()[0]
+            b_name = b_name[:20] + "..." if len(b_name) > 20 else b_name
+            label = f"C{c}: {b_name}"
+        else:
+            label = f"Cluster {c}"
+            
+        handles.append(mpatches.Patch(color=c_color, label=label))
+        
+    if len(unique_clusters) > 30:
+        handles.append(mpatches.Patch(color="white", label="... (more omitted)"))
 
-    ax.legend(handles=handles_st, loc='upper center', bbox_to_anchor=(0.5, -0.1), ncol=5, fontsize=8, title="Color Mapping")
+    ax.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, -0.1), ncol=4, fontsize=8, title="Mapped Building Clusters")
     
     plt.tight_layout()
-    out_path = os.path.join(FIG_DIR, f"2_st_dbscan_{dataset_name.lower().replace(' ', '_')}.png")
+    out_path = os.path.join(FIG_DIR, f"1_dbscan_{dataset_name.lower().replace(' ', '_')}.png")
     fig.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"[*] Saved {out_path}")
@@ -200,12 +209,12 @@ if __name__ == "__main__":
     # Run all 3 algorithms independently on the Rest Points dataset
     if not df_rest.empty:
         df_rest = run_dbscan_and_plot(df_rest, "Rest Points", eps_m=12.0, min_pts=60)
-        df_rest = run_st_dbscan_and_plot(df_rest, "Rest Points", eps_m=12.0, eps_sec=1800, min_pts=30)
-        run_kde_and_plot(df_rest, "Rest Points")
+        # df_rest = run_st_dbscan_and_plot(df_rest, "Rest Points", eps_m=12.0, eps_sec=1800, min_pts=30)
+        # run_kde_and_plot(df_rest, "Rest Points")
 
-    # Run all 3 algorithms independently on the Path dataset
-    if not df_path.empty:
-        # Relaxing constraints slightly for moving path lines
-        df_path = run_dbscan_and_plot(df_path, "Path Data", eps_m=15.0, min_pts=40)
-        df_path = run_st_dbscan_and_plot(df_path, "Path Data", eps_m=15.0, eps_sec=1800, min_pts=20)
-        run_kde_and_plot(df_path, "Path Data")
+    # # Run all 3 algorithms independently on the Path dataset
+    # if not df_path.empty:
+    #     # Relaxing constraints slightly for moving path lines
+    #     df_path = run_dbscan_and_plot(df_path, "Path Data", eps_m=15.0, min_pts=40)
+    #     df_path = run_st_dbscan_and_plot(df_path, "Path Data", eps_m=15.0, eps_sec=1800, min_pts=20)
+    #     run_kde_and_plot(df_path, "Path Data")
