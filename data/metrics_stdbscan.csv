@@ -1,0 +1,2 @@
+eps_spatial_m,eps_time_hr,min_pts,n_total,n_clusters,n_noise,noise_pct,silhouette,runtime_s
+50.0,3.0,10,5000,6,472,9.44,0.548,0.12
